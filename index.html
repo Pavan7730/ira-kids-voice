@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IRA Kids Voice</title>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    /* ── Keys — change these to your real keys ── */
+    :root {
+      --groq-key:       "YOUR_GROQ_API_KEY_HERE";
+      --elevenlabs-key: "YOUR_ELEVENLABS_API_KEY_HERE";
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Nunito', sans-serif;
+      background: #f0f4ff;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 32px 16px 200px;
+    }
+
+    /* Stars background */
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background:
+        radial-gradient(circle at 20% 20%, #e8f0fe 0%, transparent 50%),
+        radial-gradient(circle at 80% 80%, #fce4ec 0%, transparent 50%),
+        radial-gradient(circle at 50% 50%, #f3e5f5 0%, transparent 60%);
+      z-index: -1;
+    }
+
+    h1 {
+      font-size: 32px; font-weight: 900;
+      background: linear-gradient(135deg, #5c6bc0, #ab47bc);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      margin-bottom: 6px; text-align: center;
+    }
+    .subtitle { color: #888; font-size: 15px; margin-bottom: 32px; text-align: center; }
+
+    /* ── Character Cards ── */
+    .characters {
+      display: flex; gap: 16px; flex-wrap: wrap;
+      justify-content: center; margin-bottom: 28px;
+    }
+    .char-card {
+      background: white; border-radius: 24px;
+      padding: 20px 24px; text-align: center;
+      cursor: pointer; border: 3px solid transparent;
+      transition: all 0.25s cubic-bezier(.34,1.56,.64,1);
+      box-shadow: 0 4px 20px rgba(0,0,0,0.07);
+      min-width: 110px;
+    }
+    .char-card:hover   { transform: translateY(-6px) scale(1.03); }
+    .char-card.active  { border-color: #5c6bc0; background: #f0f3ff; box-shadow: 0 8px 28px rgba(92,107,192,0.25); }
+    .char-card .avatar { font-size: 44px; display: block; margin-bottom: 8px;
+                         filter: drop-shadow(0 4px 6px rgba(0,0,0,0.1)); }
+    .char-card .cname  { font-size: 15px; font-weight: 800; color: #333; }
+    .char-card .ctag   { font-size: 11px; color: #aaa; margin-top: 3px; font-weight: 600; }
+
+    /* ── Bottom Panel ── */
+    #panel {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      background: white;
+      border-top: 2px solid #eef;
+      padding: 16px 20px 28px;
+      box-shadow: 0 -8px 32px rgba(92,107,192,0.1);
+      display: flex; flex-direction: column; align-items: center; gap: 12px;
+    }
+
+    /* Language pills */
+    .langs { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+    .lang-btn {
+      padding: 5px 16px; border-radius: 20px;
+      border: 2px solid #e0e0f0; background: #fafafe;
+      font-size: 13px; font-weight: 700; cursor: pointer;
+      font-family: 'Nunito', sans-serif;
+      transition: all 0.15s;
+    }
+    .lang-btn.active { background: #5c6bc0; color: white; border-color: #5c6bc0; }
+
+    /* Transcript */
+    #transcript {
+      background: #f8f8ff; border: 1.5px solid #e8e8ff;
+      border-radius: 16px; padding: 10px 18px;
+      font-size: 14px; color: #555; text-align: center;
+      width: 100%; max-width: 480px; min-height: 44px;
+      line-height: 1.5;
+    }
+
+    /* Mic button */
+    #mic-btn {
+      width: 72px; height: 72px; border-radius: 50%;
+      border: none; cursor: pointer; font-size: 32px;
+      display: flex; align-items: center; justify-content: center;
+      transition: all 0.2s cubic-bezier(.34,1.56,.64,1);
+      box-shadow: 0 6px 20px rgba(92,107,192,0.3);
+      background: linear-gradient(135deg, #5c6bc0, #ab47bc);
+      outline: none;
+    }
+    #mic-btn:hover { transform: scale(1.08); }
+    #mic-btn.recording {
+      background: linear-gradient(135deg, #f7971e, #ffd200);
+      box-shadow: 0 6px 20px rgba(255,170,0,0.4);
+      animation: pulse 0.8s ease-in-out infinite;
+    }
+    #mic-btn.thinking { background: #bbb; cursor: not-allowed; transform: none; }
+    #mic-btn.speaking {
+      background: linear-gradient(135deg, #11998e, #38ef7d);
+      box-shadow: 0 6px 20px rgba(17,153,142,0.4);
+    }
+    @keyframes pulse {
+      0%,100% { transform: scale(1); }
+      50%      { transform: scale(1.1); }
+    }
+    #hint { font-size: 12px; color: #aaa; font-weight: 600; }
+
+    /* Chat log */
+    #log {
+      width: 100%; max-width: 480px;
+      max-height: 100px; overflow-y: auto;
+      display: flex; flex-direction: column; gap: 6px;
+    }
+    .bubble {
+      padding: 8px 14px; border-radius: 18px;
+      font-size: 13px; line-height: 1.4; max-width: 80%;
+      font-weight: 600; animation: popIn 0.2s cubic-bezier(.34,1.56,.64,1);
+    }
+    .bubble.kid { background: #ede7f6; align-self: flex-end; color: #4527a0; }
+    .bubble.ai  { background: #e8f5e9; align-self: flex-start; color: #1b5e20; }
+    @keyframes popIn {
+      from { transform: scale(0.85); opacity: 0; }
+      to   { transform: scale(1);    opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+
+  <h1>🌟 IRA Kids Voice</h1>
+  <p class="subtitle">Talk to your favourite cartoon friend!</p>
+
+  <div class="characters">
+    <div class="char-card active" data-char="doro" onclick="selectChar(this)">
+      <span class="avatar">🤖</span>
+      <div class="cname">Doro</div>
+      <div class="ctag">Science & Fun</div>
+    </div>
+    <div class="char-card" data-char="chintu" onclick="selectChar(this)">
+      <span class="avatar">😄</span>
+      <div class="cname">Chintu</div>
+      <div class="ctag">Jokes & Laughs</div>
+    </div>
+    <div class="char-card" data-char="bheemu" onclick="selectChar(this)">
+      <span class="avatar">💪</span>
+      <div class="cname">Bheemu</div>
+      <div class="ctag">Brave & Strong</div>
+    </div>
+  </div>
+
+  <div id="panel">
+    <div id="log"></div>
+
+    <div class="langs">
+      <button class="lang-btn active" data-lang="english" onclick="selectLang(this)">English</button>
+      <button class="lang-btn" data-lang="hindi"   onclick="selectLang(this)">हिंदी</button>
+      <button class="lang-btn" data-lang="telugu"  onclick="selectLang(this)">తెలుగు</button>
+      <button class="lang-btn" data-lang="tamil"   onclick="selectLang(this)">தமிழ்</button>
+    </div>
+
+    <div id="transcript">Click the mic and talk to your friend! 🎙️</div>
+
+    <button id="mic-btn" onclick="toggleMic()">🎙️</button>
+    <p id="hint">Click to START · Click again to STOP</p>
+  </div>
+
+<script>
+// ─────────────────────────────────────────────
+//  🔑  PASTE YOUR KEYS HERE
+// ─────────────────────────────────────────────
+const GROQ_KEY       = "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";
+const ELEVENLABS_KEY = "sk_c1837bae08084826491abb73f0a9eceadb9ee5af6f0ea8d8";
+
+// ─────────────────────────────────────────────
+//  🎭  VOICE IDs  (from your .env file)
+// ─────────────────────────────────────────────
+const VOICES = {
+  doro:   "oxBjXnulJpreEM5HnwLS",
+  chintu: "Yp2L7KJyVaX1qkxlRaZY",
+  bheemu: "oxBjXnulJpreEM5HnwLS"
+};
+
+// ─────────────────────────────────────────────
+//  Character system prompts
+// ─────────────────────────────────────────────
+const PROMPTS = {
+  doro:   "You are Doro, a friendly enthusiastic robot who loves helping children learn! Speak in simple fun language. Keep responses SHORT — 2 to 3 sentences max. Be warm, curious, and encouraging. Say Beep boop occasionally!",
+  chintu: "You are Chintu, a fun lovable cartoon character who makes learning hilarious! Keep responses SHORT — 2 to 3 sentences max. Make kids laugh while sneaking in real learning. Use phrases like Hehe, Oops, No way!",
+  bheemu: "You are Bheemu, a strong brave cartoon hero! Keep responses SHORT — 2 to 3 sentences max. Encourage kids to be brave and curious. Say We can do this together!"
+};
+
+const LANG_CODES = { english:"en", hindi:"hi", telugu:"te", tamil:"ta" };
+
+// ─────────────────────────────────────────────
+//  State
+// ─────────────────────────────────────────────
+let character = "doro";
+let language  = "english";
+let recording = false;
+let busy      = false;
+let mediaRec  = null;
+let chunks    = [];
+let stream    = null;
+const audio   = new Audio();
+
+// ─────────────────────────────────────────────
+//  UI helpers
+// ─────────────────────────────────────────────
+function selectChar(el) {
+  document.querySelectorAll(".char-card").forEach(c => c.classList.remove("active"));
+  el.classList.add("active");
+  character = el.dataset.char;
+  const avatars = { doro:"🤖", chintu:"😄", bheemu:"💪" };
+  setTranscript(`${avatars[character]} Hi! I am ${el.querySelector(".cname").textContent}. Click mic to talk!`);
+  document.getElementById("log").innerHTML = "";
+}
+
+function selectLang(el) {
+  document.querySelectorAll(".lang-btn").forEach(b => b.classList.remove("active"));
+  el.classList.add("active");
+  language = el.dataset.lang;
+}
+
+function setTranscript(t) { document.getElementById("transcript").textContent = t; }
+function setHint(t)       { document.getElementById("hint").textContent = t; }
+function setMic(state) {
+  const btn = document.getElementById("mic-btn");
+  const icons = { idle:"🎙️", recording:"🔴", thinking:"⏳", speaking:"🔊" };
+  btn.className = state;
+  btn.textContent = icons[state] || "🎙️";
+}
+function addBubble(text, who) {
+  const log = document.getElementById("log");
+  const div = document.createElement("div");
+  div.className = `bubble ${who}`;
+  div.textContent = text;
+  log.appendChild(div);
+  log.scrollTop = log.scrollHeight;
+}
+
+// ─────────────────────────────────────────────
+//  Mic toggle
+// ─────────────────────────────────────────────
+async function toggleMic() {
+  if (busy) return;
+  if (!recording) {
+    await startRecording();
+  } else {
+    stopRecording();
+  }
+}
+
+async function startRecording() {
+  try {
+    stream  = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const mimeType = MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "audio/mp4";
+    mediaRec = new MediaRecorder(stream, { mimeType });
+    chunks   = [];
+    mediaRec.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+    mediaRec.onstop = processAudio;
+    mediaRec.start();
+    recording = true;
+    setMic("recording");
+    setTranscript("🔴 Listening... Click mic to stop!");
+    setHint("Click mic to STOP");
+  } catch(e) {
+    alert("Please allow microphone access to talk!");
+  }
+}
+
+function stopRecording() {
+  if (mediaRec && recording) {
+    mediaRec.stop();
+    stream?.getTracks().forEach(t => t.stop());
+    recording = false;
+  }
+}
+
+// ─────────────────────────────────────────────
+//  Full pipeline: audio → Groq STT → Groq LLM → ElevenLabs TTS
+// ─────────────────────────────────────────────
+async function processAudio() {
+  if (!chunks.length) return;
+  busy = true;
+  setMic("thinking");
+  setTranscript("🤔 Thinking...");
+  setHint("Please wait...");
+
+  try {
+    // ── Step 1: Groq Whisper STT ──
+    const mimeType = mediaRec.mimeType;
+    const blob     = new Blob(chunks, { type: mimeType });
+    const ext      = mimeType.includes("webm") ? "webm" : "mp4";
+    const formData = new FormData();
+    formData.append("file",            blob, `audio.${ext}`);
+    formData.append("model",           "whisper-large-v3");
+    formData.append("language",        LANG_CODES[language] || "en");
+    formData.append("response_format", "json");
+
+    const sttRes  = await fetch("https://api.groq.com/openai/v1/audio/transcriptions", {
+      method:  "POST",
+      headers: { "Authorization": `Bearer ${GROQ_KEY}` },
+      body:    formData
+    });
+    const sttData = await sttRes.json();
+    const kidText = sttData.text?.trim();
+
+    if (!kidText) {
+      setTranscript("I couldn't hear you! Try again 😊");
+      reset(); return;
+    }
+    addBubble(kidText, "kid");
+
+    // ── Step 2: Groq LLaMA ──
+    const langInstruction = language !== "english" ? `Respond ONLY in ${language}.` : "";
+    const systemPrompt    = `${PROMPTS[character]} ${langInstruction}`.trim();
+
+    const llmRes  = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method:  "POST",
+      headers: { "Authorization": `Bearer ${GROQ_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model:      "llama-3.3-70b-versatile",
+        max_tokens: 150,
+        messages:   [
+          { role: "system", content: systemPrompt },
+          { role: "user",   content: kidText }
+        ]
+      })
+    });
+    const llmData  = await llmRes.json();
+    const replyText = llmData.choices?.[0]?.message?.content?.trim();
+
+    if (!replyText) { setTranscript("Hmm I got confused! Try again 😅"); reset(); return; }
+    addBubble(replyText, "ai");
+    setTranscript(replyText);
+
+    // ── Step 3: ElevenLabs TTS ──
+    const voiceId  = VOICES[character];
+    const ttsRes   = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
+      method:  "POST",
+      headers: { "xi-api-key": ELEVENLABS_KEY, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        text:      replyText,
+        model_id:  "eleven_multilingual_v2",
+        voice_settings: { stability: 0.45, similarity_boost: 0.80, style: 0.35, use_speaker_boost: true }
+      })
+    });
+
+    const audioBlob = await ttsRes.blob();
+    const audioUrl  = URL.createObjectURL(audioBlob);
+    audio.src = audioUrl;
+    setMic("speaking");
+    setHint("🔊 Speaking...");
+    await audio.play();
+    audio.onended = () => { URL.revokeObjectURL(audioUrl); reset(); };
+
+  } catch(err) {
+    console.error(err);
+    setTranscript("Oops! Something went wrong. Try again! 😅");
+    reset();
+  }
+}
+
+function reset() {
+  setMic("idle");
+  setHint("Click to START · Click again to STOP");
+  busy = false;
+}
+</script>
+</body>
+</html>
