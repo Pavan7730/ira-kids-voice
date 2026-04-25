@@ -12,10 +12,6 @@ load_dotenv()
 
 from groq import Groq
 import requests
-import traceback
-import logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
 from fastapi.responses import StreamingResponse
 
@@ -122,10 +118,7 @@ async def full_pipeline(
             "use_speaker_boost": True
         }
     }
-logger.info(f"Kid said: {kid_text}")
-    logger.info(f"AI replied: {reply_text}")
-    logger.info(f"Voice ID: {voice_id}")
-    logger.info(f"ElevenLabs key exists: {bool(ELEVENLABS_KEY)}")
+
     tts_response = requests.post(url, headers=headers, json=payload, stream=True, timeout=30)
     if tts_response.status_code != 200:
         raise HTTPException(status_code=500, detail=f"ElevenLabs error: {tts_response.text}")
